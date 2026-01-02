@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pembelian - Sistem Pembelian</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .sidebar a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            padding: 12px 20px;
+            display: block;
+            transition: all 0.3s;
+        }
+
+        .sidebar a:hover,
+        .sidebar a.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-2 sidebar text-white p-0">
+                <div class="p-4">
+                    <h4 class="mb-4"><i class="bi bi-shop"></i> Admin Toko</h4>
+                </div>
+                <nav>
+                    <a href="/"><i class="bi bi-speedometer2"></i> Dashboard</a>
+                    <a href="/produk"><i class="bi bi-box-seam"></i> Produk</a>
+                    <a href="/pembelian" class="active"><i class="bi bi-cart"></i> Pembelian</a>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-10 p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="bi bi-cart"></i> Data Pembelian</h2>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPurchaseModal">
+                        <i class="bi bi-plus-circle"></i> Buat Pembelian Baru
+                    </button>
+                </div>
+
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>No. Pembelian</th>
+                                        <th>Produk</th>
+                                        <th>Jumlah</th>
+                                        <th>Total Harga</th>
+                                        <th>Tanggal</th>
+                                        <th>Status</th>
+                                        <th>Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="purchaseList">
+                                    <tr>
+                                        <td colspan="7" class="text-center">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Purchase Modal -->
+    <div class="modal fade" id="addPurchaseModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-cart-plus"></i> Buat Pembelian Baru</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="purchaseForm">
+                        <div class="mb-3">
+                            <label class="form-label">Pilih Produk</label>
+                            <select class="form-select" id="productSelect" required>
+                                <option value="">-- Pilih Produk --</option>
+                            </select>
+                            <div class="form-text" id="stockInfo"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Jumlah</label>
+                            <input type="number" class="form-control" id="quantity" min="1" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Total Harga</label>
+                            <input type="text" class="form-control" id="totalPrice" readonly>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-primary" onclick="savePurchase()">
+                        <i class="bi bi-save"></i> Simpan Pembelian
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let products = [];
+        let modal;
+
+        async function loadProducts() {
+            try {
+                const response = await fetch('/api/produk');
+                products = await response.json();
+
+                const select = document.getElementById('productSelect');
+                select.innerHTML = '<option value="">-- Pilih Produk --</option>' +
+                    products.map(p => `<option value="${p.id}" data-price="${p.harga}" data-stock="${p.stock}">
+            ${p.nama_produk} - Rp ${p.harga.toLocaleString('id-ID')} (Stock: ${p.stock})
+          </option>`).join('');
+            } catch (error) {
+                console.error('Error loading products:', error);
+            }
+        }
+
+        async function loadPurchases() {
+            try {
+                const response = await fetch('/api/pembelian');
+                const purchases = await response.json();
+
+                const tbody = document.getElementById('purchaseList');
+
+                if (purchases.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Belum ada data pembelian</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = purchases.map(p => `
+          <tr>
+            <td><strong>${p.nomor_pembelian}</strong></td>
+            <td>${p.nama_produk}<br><small class="text-muted">${p.kode_produk}</small></td>
+            <td>${p.jumlah} unit</td>
+            <td>Rp ${p.total_harga.toLocaleString('id-ID')}</td>
+            <td>${new Date(p.tanggal_pembelian).toLocaleString('id-ID')}</td>
+            <td>
+              ${p.status === 'active'
+                        ? '<span class="badge bg-success">Aktif</span>'
+                        : '<span class="badge bg-danger">Dibatalkan</span>'
+                    }
+            </td>
+            <td>
+              ${p.status === 'active'
+                        ? `<button class="btn btn-sm btn-danger" onclick="cancelPurchase(${p.id})">
+                    <i class="bi bi-x-circle"></i> Cancel
+                   </button>`
+                        : '<span class="text-muted">-</span>'
+                    }
+            </td>
+          </tr>
+        `).join('');
+            } catch (error) {
+                console.error('Error loading purchases:', error);
+                document.getElementById('purchaseList').innerHTML =
+                    '<tr><td colspan="7" class="text-center text-danger">Gagal memuat data pembelian</td></tr>';
+            }
+        }
+
+        document.getElementById('productSelect').addEventListener('change', function () {
+            const option = this.options[this.selectedIndex];
+            const stock = option.dataset.stock;
+            document.getElementById('stockInfo').textContent = stock > 0
+                ? `Stock tersedia: ${stock} unit`
+                : 'Stock habis!';
+            calculateTotal();
+        });
+
+        document.getElementById('quantity').addEventListener('input', calculateTotal);
+
+        function calculateTotal() {
+            const select = document.getElementById('productSelect');
+            const option = select.options[select.selectedIndex];
+            const price = parseFloat(option.dataset.price) || 0;
+            const quantity = parseInt(document.getElementById('quantity').value) || 0;
+            const total = price * quantity;
+
+            document.getElementById('totalPrice').value = total > 0
+                ? 'Rp ' + total.toLocaleString('id-ID')
+                : '';
+        }
+
+        async function savePurchase() {
+            const produk_id = document.getElementById('productSelect').value;
+            const jumlah = parseInt(document.getElementById('quantity').value);
+
+            if (!produk_id || !jumlah || jumlah <= 0) {
+                alert('Mohon lengkapi semua field!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/pembelian', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ produk_id, jumlah })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert('Pembelian berhasil dibuat!');
+                    bootstrap.Modal.getInstance(document.getElementById('addPurchaseModal')).hide();
+                    document.getElementById('purchaseForm').reset();
+                    loadPurchases();
+                    loadProducts();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error saving purchase:', error);
+                alert('Gagal menyimpan pembelian!');
+            }
+        }
+
+        async function cancelPurchase(id) {
+            if (!confirm('Apakah Anda yakin ingin membatalkan pembelian ini?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/pembelian/${id}/cancel`, {
+                    method: 'PUT'
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert('Pembelian berhasil dibatalkan!');
+                    loadPurchases();
+                    loadProducts();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error cancelling purchase:', error);
+                alert('Gagal membatalkan pembelian!');
+            }
+        }
+
+        // Load data on page load
+        loadProducts();
+        loadPurchases();
+    </script>
+</body>
+
+</html>
